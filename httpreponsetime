@@ -1,0 +1,122 @@
+#!/usr/bin/python
+'''
+Plugin to measure response times for urls.
+This is useful as a sort of final availability measurement.
+
+How to configure:
+[httpresponsetime]
+    env.urls http://www.google.com, http://www.yahoo.com/something
+
+Put the urls you'd like to check, separated by commas in your conf file.
+
+Requires httplib2 for python (easy_install httplib2, or http://code.google.com/p/httplib2/ )
+Graphs the time (in milliseconds) for the response of the url(s) provided.
+If the http request fails (4XX, 5XX) will output -1, which is marked as
+critical.
+
+Arthur Debert <arthur@stimuli.com.br>
+http://www.stimuli.com.br
+FreeBSD licensed 
+'''
+import sys, os
+
+# the main configuration node
+config  =  {
+                "master" : {
+                    "graph_title" : 'Http Response Times',
+                    "graph_args" : '--base 1000 -l 0',
+                    "graph_vlabel" : 'Time (in milliseconds)',
+                    "graph_category" : 'Http Monitoring',
+                    "graph_scale" : 'no',
+                    "label" : 'Response times',
+                    
+                },
+                "url_to_check" : {
+                    "label" : '%(url)s',
+                    "type" : 'GAUGE',
+                    "min" : '-1',
+                    "max" : '2000',
+                    "draw" : 'LINE2',
+                    "info" : 'Time (in milliseconds) for response',
+                    "critical": "-1",
+                },
+}
+
+def get_config(urls):
+    for key,value in config['master'].items():
+        print "%s %s" % (key, value)
+    for url in urls:
+        for key, value in config["url_to_check"].items():
+            value = value % ({"url":url})
+            printable_url = get_printable_url(url)
+            print "%s.%s %s" % (printable_url, key, value)
+        print "%s.value %s" % (printable_url, get_request_time(url))
+                   
+def get_printable_url(url):
+    '''
+    Makes a field name friendly version of the url, as the rdd config commands
+    will not allow slashes, dots and other characters.
+    '''
+    import urlparse
+    parsed = urlparse.urlsplit (url)
+    return ("%s_%s_%s" % (parsed.netloc , parsed.path, parsed.query)).replace("/", "_").replace(".", "_")
+
+def get_request_time(url):
+    '''
+    Returns the time, in millseconds, for the request to be fetched.
+    Returns -1 on failuer (Http status code other that 200 > x > 400
+    '''
+    import httplib2, time
+    fetcher = httplib2.Http()
+    initial = time.time()
+    resp, content = fetcher.request(url)
+    duration = int((time.time() - initial) * 1000)
+    resp_code = int(resp["status"])
+    if 200 <= resp_code < 400:
+        return duration
+    return -1
+     
+def get_urls():
+    try:
+        return os.environ["urls"].split(",")
+    except KeyError:
+        print "You needto specify which URLS to monitor by setting the 'urls' env variable in your munin-conf."
+        sys.exit(1)
+
+def run():
+    urls = get_urls() 
+    for url in urls:
+        printable_url = get_printable_url(url)
+        url_time = get_request_time(url)
+        print "%s.value %s" % (printable_url, url_time)
+    sys.exit(0)
+
+def exit_with_failure(msg):
+    print msg
+    sys.exit(1)
+
+def exit_with_success():
+    sys.exit(0)
+
+if __name__ == "__main__":
+
+    try:
+        import httplib2
+    except ImportError:
+        exit_with_failure("This plugin requires the httplib2 (easy_install httplib2, or http://code.google.com/p/httplib2/ ) library for python, aborting.")
+    if len(sys.argv) > 1:
+        cmd_name = sys.argv[1]
+    else:
+        cmd_name = None
+    if cmd_name and  cmd_name == "autoconf":
+        exit_with_failure('no')
+    elif cmd_name and cmd_name == "suggest":
+        print ""
+        exit_with_success()
+    elif cmd_name == "config":
+        get_config(get_urls()) 
+        exit_with_success()
+    else: 
+        run()
+        sys.exit(0)
+    exit_with_failure("Unsupported command")
