@@ -50,7 +50,6 @@ def get_config(urls):
             value = value % ({"url":url})
             printable_url = get_printable_url(url)
             print "%s.%s %s" % (printable_url, key, value)
-        print "%s.value %s" % (printable_url, get_request_time(url))
                    
 def get_printable_url(url):
     '''
