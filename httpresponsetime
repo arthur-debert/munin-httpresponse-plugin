@@ -38,7 +38,8 @@ config  =  {
                     "max" : '2000',
                     "draw" : 'LINE2',
                     "info" : 'Time (in milliseconds) for response',
-                    "critical": "-1",
+                    "warning": "0:1500",
+                    "critical": "0:2000",
                 },
 }
 
